@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Regresión lineal — Concepto general</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 760px; margin: 30px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; color: #1F4E79; margin-bottom: 4px; }
+  p.sub { color: #666; font-size: 14px; margin-top: 0; }
+  .panel { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin: 16px 0; }
+  .canvas-wrap { flex: 2; min-width: 320px; }
+  .side { flex: 1; min-width: 220px; }
+  canvas { border: 1px solid #ccc; border-radius: 4px; cursor: crosshair; touch-action: none; width: 100%; }
+  .result-box { background: #EAF1F8; padding: 12px 16px; border-radius: 6px; font-size: 14px; line-height: 1.7; }
+  .result-box b { color: #1F4E79; }
+  button { margin: 4px 6px 0 0; padding: 6px 12px; cursor: pointer; }
+  .legend { font-size: 12px; color: #555; margin-top: 8px; }
+  .legend span { display: inline-flex; align-items: center; margin-right: 14px; }
+  .swatch { width: 12px; height: 12px; display: inline-block; margin-right: 4px; border-radius: 2px; }
+  .instructions { font-size: 13px; color: #444; background: #f5f5f5; padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<h1>¿Qué es la regresión lineal?</h1>
+<p class="sub">Haz clic en el gráfico para añadir puntos y observa cómo se ajusta la recta.</p>
+
+<div class="instructions">
+  Cada vez que añades un punto, la recta se recalcula para minimizar la suma de las distancias verticales al cuadrado (líneas discontinuas) entre los puntos y la recta — eso es lo que significa "mejor ajuste".
+  Puedes arrastrar los puntos ya colocados para ver cómo cambia la recta en tiempo real.
+</div>
+
+<div class="panel">
+  <div class="canvas-wrap">
+    <canvas id="plot" width="500" height="400"></canvas>
+    <div class="legend">
+      <span><span class="swatch" style="background:#D85A30"></span>puntos</span>
+      <span><span class="swatch" style="background:#1F4E79"></span>recta de regresión</span>
+      <span><span class="swatch" style="background:#999"></span>residuo (distancia vertical)</span>
+    </div>
+    <button onclick="clearPoints()">Borrar todo</button>
+    <button onclick="loadExample()">Cargar ejemplo</button>
+    <button onclick="toggleResiduals()">Mostrar/ocultar residuos</button>
+  </div>
+
+  <div class="side">
+    <div class="result-box" id="output">
+      Añade al menos 2 puntos para ver el ajuste.
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById("plot");
+const ctx = canvas.getContext("2d");
+const W = canvas.width, H = canvas.height;
+const margin = 40;
+
+let points = [];
+let showResiduals = true;
+let dragIndex = -1;
+
+function toCanvas(x, y) {
+  return [margin + x * (W - 2 * margin), H - margin - y * (H - 2 * margin)];
+}
+function toData(cx, cy) {
+  return [(cx - margin) / (W - 2 * margin), (H - margin - cy) / (H - 2 * margin)];
+}
+
+function regression(pts) {
+  const n = pts.length;
+  if (n < 2) return null;
+  const sumX = pts.reduce((a, p) => a + p[0], 0);
+  const sumY = pts.reduce((a, p) => a + p[1], 0);
+  const sumXY = pts.reduce((a, p) => a + p[0] * p[1], 0);
+  const sumX2 = pts.reduce((a, p) => a + p[0] * p[0], 0);
+  const meanX = sumX / n, meanY = sumY / n;
+  const denom = n * sumX2 - sumX * sumX;
+  if (Math.abs(denom) < 1e-9) return null;
+  const m = (n * sumXY - sumX * sumY) / denom;
+  const b = meanY - m * meanX;
+  const ssTot = pts.reduce((a, p) => a + (p[1] - meanY) ** 2, 0);
+  const ssRes = pts.reduce((a, p) => a + (p[1] - (m * p[0] + b)) ** 2, 0);
+  const r2 = ssTot < 1e-9 ? 1 : 1 - ssRes / ssTot;
+  return { m, b, r2, ssRes };
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  ctx.strokeStyle = "#ccc";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(margin, H - margin); ctx.lineTo(W - margin, H - margin);
+  ctx.moveTo(margin, margin); ctx.lineTo(margin, H - margin);
+  ctx.stroke();
+  ctx.fillStyle = "#666"; ctx.font = "12px Arial";
+  ctx.fillText("x", W - margin + 8, H - margin + 4);
+  ctx.fillText("y", margin - 4, margin - 8);
+
+  const reg = regression(points);
+
+  if (reg && showResiduals) {
+    ctx.strokeStyle = "#999";
+    ctx.setLineDash([3, 3]);
+    points.forEach(p => {
+      const yPred = reg.m * p[0] + reg.b;
+      const [cx, cy1] = toCanvas(p[0], p[1]);
+      const [, cy2] = toCanvas(p[0], yPred);
+      ctx.beginPath(); ctx.moveTo(cx, cy1); ctx.lineTo(cx, cy2); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+  }
+
+  if (reg) {
+    const x0 = 0, x1 = 1;
+    const y0 = reg.m * x0 + reg.b, y1 = reg.m * x1 + reg.b;
+    const [cx0, cy0] = toCanvas(x0, y0);
+    const [cx1, cy1] = toCanvas(x1, y1);
+    ctx.strokeStyle = "#1F4E79";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx0, cy0); ctx.lineTo(cx1, cy1); ctx.stroke();
+  }
+
+  points.forEach(p => {
+    const [cx, cy] = toCanvas(p[0], p[1]);
+    ctx.fillStyle = "#D85A30";
+    ctx.beginPath(); ctx.arc(cx, cy, 6, 0, 2 * Math.PI); ctx.fill();
+  });
+
+  const out = document.getElementById("output");
+  if (reg) {
+    out.innerHTML = `
+      <b>Ecuación de la recta</b><br>
+      y = ${reg.m.toFixed(3)}·x ${reg.b >= 0 ? "+" : "-"} ${Math.abs(reg.b).toFixed(3)}<br><br>
+      <b>Pendiente (m)</b> = ${reg.m.toFixed(4)}<br>
+      <b>Ordenada (b)</b> = ${reg.b.toFixed(4)}<br>
+      <b>R²</b> = ${reg.r2.toFixed(4)}<br>
+      <b>Suma de residuos²</b> = ${reg.ssRes.toFixed(4)}<br><br>
+      <span style="color:#666;font-size:12px">
+      La recta mostrada es la que hace mínima esa suma de residuos al cuadrado — por eso se llama "recta de mínimos cuadrados".
+      </span>
+    `;
+  } else {
+    out.innerHTML = "Añade al menos 2 puntos para ver el ajuste.";
+  }
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (W / rect.width);
+  const cy = (e.clientY - rect.top) * (H / rect.height);
+
+  for (let i = 0; i < points.length; i++) {
+    const [px, py] = toCanvas(points[i][0], points[i][1]);
+    if (Math.hypot(px - cx, py - cy) < 10) { dragIndex = i; return; }
+  }
+  const [dx, dy] = toData(cx, cy);
+  if (dx >= 0 && dx <= 1 && dy >= 0 && dy <= 1) {
+    points.push([dx, dy]);
+    draw();
+  }
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (dragIndex === -1) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) * (W / rect.width);
+  const cy = (e.clientY - rect.top) * (H / rect.height);
+  const [dx, dy] = toData(cx, cy);
+  points[dragIndex] = [Math.min(1, Math.max(0, dx)), Math.min(1, Math.max(0, dy))];
+  draw();
+});
+
+window.addEventListener("mouseup", () => { dragIndex = -1; });
+
+function clearPoints() { points = []; draw(); }
+function toggleResiduals() { showResiduals = !showResiduals; draw(); }
+function loadExample() {
+  points = [[0.1,0.15],[0.25,0.3],[0.4,0.38],[0.55,0.5],[0.7,0.62],[0.85,0.8]];
+  draw();
+}
+
+loadExample();
+</script>
+</body>
+</html>

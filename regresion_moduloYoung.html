@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Regresión lineal — Módulo de Young</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; color: #1F4E79; }
+  p.sub { color: #666; font-size: 14px; margin-top: -8px; }
+  .panel { display: flex; gap: 24px; flex-wrap: wrap; margin: 20px 0; }
+  .inputs, .results { flex: 1; min-width: 260px; }
+  label { display: block; font-size: 13px; margin: 10px 0 3px; }
+  input[type=number] { width: 100%; padding: 5px; box-sizing: border-box; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { border: 1px solid #ccc; padding: 4px 6px; font-size: 13px; text-align: center; }
+  th { background: #1F4E79; color: white; }
+  button { margin-top: 10px; padding: 6px 14px; cursor: pointer; }
+  .result-box { background: #EAF1F8; padding: 12px 16px; border-radius: 6px; margin-top: 10px; font-size: 14px; }
+  .result-box b { color: #1F4E79; }
+  canvas { max-width: 100%; }
+</style>
+</head>
+<body>
+
+<h1>Regresión lineal: de los datos al módulo de Young E</h1>
+<p class="sub">Viga empotrada en ambos extremos, carga central. Introduce tus propios datos experimentales.</p>
+
+<div class="panel">
+  <div class="inputs">
+    <label>L — longitud (m)</label>
+    <input type="number" id="L" value="0.879" step="0.001">
+    <label>b — ancho de la sección (m)</label>
+    <input type="number" id="b" value="0.005" step="0.001">
+    <label>h — espesor de la sección (m)</label>
+    <input type="number" id="h" value="0.005" step="0.001">
+
+    <table id="dataTable">
+      <thead><tr><th>P (N)</th><th>y_max (m)</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <button onclick="addRow()">+ añadir fila</button>
+    <button onclick="calcular()">Calcular</button>
+  </div>
+
+  <div class="results">
+    <canvas id="chart"></canvas>
+    <div class="result-box" id="output">Introduce datos y pulsa Calcular.</div>
+  </div>
+</div>
+
+<script>
+const defaultData = [
+  [0.980, 0.003], [1.960, 0.01], [2.940, 0.013],
+  [3.920, 0.016], [4.900, 0.022], [5.880, 0.027]
+];
+
+function addRow(p = "", y = "") {
+  const tbody = document.querySelector("#dataTable tbody");
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td><input type="number" step="any" value="${p}" style="width:80px"></td>
+                  <td><input type="number" step="any" value="${y}" style="width:80px"></td>`;
+  tbody.appendChild(tr);
+}
+
+defaultData.forEach(([p, y]) => addRow(p, y));
+
+let chart;
+
+function calcular() {
+  const rows = document.querySelectorAll("#dataTable tbody tr");
+  const P = [], Y = [];
+  rows.forEach(r => {
+    const inputs = r.querySelectorAll("input");
+    const p = parseFloat(inputs[0].value);
+    const y = parseFloat(inputs[1].value);
+    if (!isNaN(p) && !isNaN(y)) { P.push(p); Y.push(y); }
+  });
+
+  if (P.length < 2) {
+    document.getElementById("output").innerHTML = "Introduce al menos 2 puntos válidos.";
+    return;
+  }
+
+  const n = P.length;
+  const sumP = P.reduce((a, b) => a + b, 0);
+  const sumY = Y.reduce((a, b) => a + b, 0);
+  const sumPY = P.reduce((acc, p, i) => acc + p * Y[i], 0);
+  const sumP2 = P.reduce((acc, p) => acc + p * p, 0);
+  const meanP = sumP / n, meanY = sumY / n;
+
+  const m = (n * sumPY - sumP * sumY) / (n * sumP2 - sumP * sumP);
+  const b0 = meanY - m * meanP;
+
+  const ssTot = Y.reduce((acc, y) => acc + (y - meanY) ** 2, 0);
+  const ssRes = Y.reduce((acc, y, i) => acc + (y - (m * P[i] + b0)) ** 2, 0);
+  const r2 = 1 - ssRes / ssTot;
+
+  const L = parseFloat(document.getElementById("L").value);
+  const bSec = parseFloat(document.getElementById("b").value);
+  const hSec = parseFloat(document.getElementById("h").value);
+  const I = (bSec * Math.pow(hSec, 3)) / 12;
+  const E_pa = Math.pow(L, 3) / (192 * I * m);
+  const E_gpa = E_pa / 1e9;
+
+  document.getElementById("output").innerHTML = `
+    <b>k (pendiente)</b> = ${m.toExponential(4)} m/N<br>
+    <b>R²</b> = ${r2.toFixed(4)}<br>
+    <b>I</b> = ${I.toExponential(4)} m⁴<br>
+    <b>E</b> = ${E_pa.toExponential(4)} Pa &nbsp;=&nbsp; <b>${E_gpa.toFixed(2)} GPa</b>
+  `;
+
+  const xs = [Math.min(...P) * 0.9, Math.max(...P) * 1.1];
+  const trendline = xs.map(x => m * x + b0);
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById("chart"), {
+    type: "scatter",
+    data: {
+      datasets: [
+        { label: "Datos experimentales", data: P.map((p, i) => ({x: p, y: Y[i]})), backgroundColor: "#D85A30" },
+        { label: "Recta de regresión", data: xs.map((x, i) => ({x: x, y: trendline[i]})), type: "line", borderColor: "#1F4E79", fill: false, pointRadius: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { title: { display: true, text: "P (N)" } },
+        y: { title: { display: true, text: "y_max (m)" } }
+      }
+    }
+  });
+}
+
+calcular();
+</script>
+</body>
+</html>
