@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Regresión lineal — Módulo de Young</title>
+<title>Regresión lineal - Módulo de Young</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   body { font-family: Arial, sans-serif; max-width: 720px; margin: 30px auto; padding: 0 16px; color: #222; }
@@ -19,24 +19,27 @@
   .result-box { background: #EAF1F8; padding: 12px 16px; border-radius: 6px; margin-top: 10px; font-size: 14px; }
   .result-box b { color: #1F4E79; }
   canvas { max-width: 100%; }
+  .p-readonly { color: #555; font-style: italic; }
 </style>
 </head>
 <body>
 
-<h1>Regresión lineal: de los datos al módulo de Young E</h1>
-<p class="sub">Viga empotrada en ambos extremos, carga central. Introduce tus propios datos experimentales.</p>
+<h1>Regresión lineal: de los datos experimentales al módulo de Young E</h1>
+<p class="sub">Viga empotrada en ambos extremos, carga central. Introduce tus propias medidas experimentales.</p>
 
 <div class="panel">
   <div class="inputs">
-    <label>L — longitud (m)</label>
+    <label>L — Longitud (m)</label>
     <input type="number" id="L" value="0.879" step="0.001">
-    <label>b — ancho de la sección (m)</label>
+    <label>b — Ancho de la sección (m)</label>
     <input type="number" id="b" value="0.005" step="0.001">
-    <label>h — espesor de la sección (m)</label>
+    <label>h — Espesor de la sección (m)</label>
     <input type="number" id="h" value="0.005" step="0.001">
+    <label>g — Gravedad (m/s²)</label>
+    <input type="number" id="g" value="9.81" step="0.01">
 
     <table id="dataTable">
-      <thead><tr><th>P (N)</th><th>y_max (m)</th></tr></thead>
+      <thead><tr><th>Masa (kg)</th><th>P = m·g (N)</th><th>y_max (m)</th></tr></thead>
       <tbody></tbody>
     </table>
     <button onclick="addRow()">+ añadir fila</button>
@@ -50,31 +53,43 @@
 </div>
 
 <script>
+// Masas en kg (se calcula P = m*g automáticamente)
 const defaultData = [
-  [0.980, 0.003], [1.960, 0.01], [2.940, 0.013],
-  [3.920, 0.016], [4.900, 0.022], [5.880, 0.027]
+  [0.1, 0.003], [0.2, 0.01], [0.3, 0.013],
+  [0.4, 0.016], [0.5, 0.022], [0.6, 0.027]
 ];
 
-function addRow(p = "", y = "") {
+function addRow(masa = "", y = "") {
   const tbody = document.querySelector("#dataTable tbody");
   const tr = document.createElement("tr");
-  tr.innerHTML = `<td><input type="number" step="any" value="${p}" style="width:80px"></td>
+  tr.innerHTML = `<td><input type="number" step="any" value="${masa}" style="width:70px" oninput="updateP(this)"></td>
+                  <td class="p-readonly">—</td>
                   <td><input type="number" step="any" value="${y}" style="width:80px"></td>`;
   tbody.appendChild(tr);
+  updateP(tr.querySelector("input"));
 }
 
-defaultData.forEach(([p, y]) => addRow(p, y));
+function updateP(input) {
+  const g = parseFloat(document.getElementById("g").value) || 9.81;
+  const masa = parseFloat(input.value);
+  const pCell = input.closest("tr").children[1];
+  pCell.textContent = isNaN(masa) ? "—" : (masa * g).toFixed(3);
+}
+
+defaultData.forEach(([m, y]) => addRow(m, y));
 
 let chart;
 
 function calcular() {
+  const g = parseFloat(document.getElementById("g").value) || 9.81;
   const rows = document.querySelectorAll("#dataTable tbody tr");
   const P = [], Y = [];
   rows.forEach(r => {
     const inputs = r.querySelectorAll("input");
-    const p = parseFloat(inputs[0].value);
+    const masa = parseFloat(inputs[0].value);
     const y = parseFloat(inputs[1].value);
-    if (!isNaN(p) && !isNaN(y)) { P.push(p); Y.push(y); }
+    updateP(inputs[0]);
+    if (!isNaN(masa) && !isNaN(y)) { P.push(masa * g); Y.push(y); }
   });
 
   if (P.length < 2) {
